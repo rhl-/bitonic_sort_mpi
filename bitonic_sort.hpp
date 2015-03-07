@@ -3,7 +3,8 @@
 
 #include <algorithm>
 #include <iterator>
-#include <math.h>
+#include <cmath>
+#include <cassert>
 #include <vector>
 
 
@@ -72,14 +73,14 @@ void compare_high(Communicator& world, int neighbor,
     //send our greatest element to our neighbor in compare_low()
     auto send_min_request = world.isend( neighbor, 0, min);
 
-    //Wait until we have received min value..
+    //Wait until we have received max value..
     receive_max_request.wait();
 
-    //Only consider values which are >= there min value
-    auto not_less_than_max_begin = std::lower_bound( begin, end, max, less);
+    //Only consider values which are <= there max value
+    auto greater_than_max_begin = std::upper_bound( begin, end, max, less);
     //Compute the size of the potential overlap 
     std::size_t 
-     my_overlap_size = std::distance( begin, not_less_than_max_begin);
+     my_overlap_size = std::distance( begin, greater_than_max_begin);
 
     //Wait to receive data from partner
     Buffer receive_merge_buffer; 
@@ -90,10 +91,11 @@ void compare_high(Communicator& world, int neighbor,
 
     //Merge there data with our data
     Buffer merged_results( there_overlap_size+my_overlap_size);
-    auto new_data_end = std::merge( begin, not_less_than_max_begin, 
+    auto new_data_end = std::merge( begin, greater_than_max_begin, 
 			    receive_merge_buffer.begin(),
 	 		    receive_merge_buffer.end(), merged_results.begin()); 
     auto new_data_begin =  new_data_end-my_overlap_size;
+    assert( std::distance( new_data_begin, new_data_end) == my_overlap_size);
     //overwrite the original data in tail with the new data 
     std::copy(  new_data_begin, new_data_end, begin); 
 
