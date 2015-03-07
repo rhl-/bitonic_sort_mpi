@@ -23,22 +23,33 @@ std::stringstream ss;
 std::vector< std::vector< int> > orig_data;
 data.push_back( world.rank()) ;
 mpi::gather( world, data, orig_data, 0);
+std::vector< int> correct_answer;
 if( world.rank() == 0){
-for( auto& p : orig_data){ 
+for( auto& p : orig_data){
     int rank = p.back();
     p.pop_back();
-    ss << rank << " ";
+    ss << rank << " "; 
+    correct_answer.insert( correct_answer.end(), p.begin(), p.end());
     for( auto & i : p){ ss <<  i << " "; } 
     ss << std::endl;
 }
+std::sort( correct_answer.begin(), correct_answer.end());
 std::cout << ss.str() << std::endl;
 }
+data.pop_back();
+
+ss << "Rank " << world.rank() << ": " << " calling bitonic sort";
 distributed::bitonic_sort( world, data.begin(), data.end());
 ss.str("");
 ss << "Rank " << world.rank() << ": ";
 for( auto& i : data){ ss << i << " "; }
 ss << std::endl;
 std::cout << ss.str() << std::endl;
-
+if( world.rank() == 0){
+for( auto & i : correct_answer){
+	std::cout << i << " ";
+}
+std::cout << std::endl;
+}
 return 0;
 }

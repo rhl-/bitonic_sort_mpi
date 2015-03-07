@@ -12,11 +12,12 @@ namespace distributed{
 
 template< typename Communicator, typename Iterator, typename Less>
 void compare_low(Communicator& world, int neighbor, 
-		 Iterator begin, Iterator end, Less& less) {
+		 Iterator begin, Iterator end, const Less& less) {
 
     typedef typename Iterator::value_type T; 
     typedef std::vector< T> Buffer;
 
+    
     std::size_t length = std::distance( begin, end);
     // Exchange with a neighbor whose processor number differs only at the jth bit.
  
@@ -26,36 +27,51 @@ void compare_low(Communicator& world, int neighbor,
      T min, max = *(begin+length-1);
     //send our greatest element to our neighbor in compare_high()
     auto send_max_request = world.isend( neighbor, 0, max);
-    //Wait until we have received min value..
     auto min_receive_request = world.irecv( neighbor, 0, min);
-
+    //Prepare receive buffer 
+    Buffer merge_receive_buffer;
+    //Post our receive very very early
+    auto sorted_tail_data_request = world.irecv( neighbor, 1, merge_receive_buffer);
+    //Wait until we have received min value..
     min_receive_request.wait();
+    std::cout << "CL Rank: " << world.rank() << " neighbor: " << neighbor 
+	      << " max: " << max << " min: " << min << std::endl;
     //Only send to partner numbers which are >= there min value
     auto not_less_than_begin = std::lower_bound( begin, end, min, less);
 
-    //Prepare and send the send buffer     
+    //Prepare and send the send buffer
     Buffer merge_send_buffer( not_less_than_begin, end);
     std::size_t size_to_overwrite = merge_send_buffer.size();
     auto send_merge_request = world.isend( neighbor, 1, merge_send_buffer);
- 
-    //Prepare receive buffer and wait for it to appear
-    Buffer merge_receive_buffer;
-    world.recv( neighbor, 1, merge_receive_buffer);
- 
-    //TODO: OPTIMIZATION: Use the original datastructure as the receive buffer..  
+
+      std::cout << "CL Rank: " << world.rank() 
+	        << " sent the the merge_send_buffer " << size_to_overwrite 
+	        <<" will now wait for reply " << std::endl;
+
+    //Now wait for receive buffer to appear and send buffer to send
+    std::vector< boost::mpi::request> requests; 
+    requests.push_back( sorted_tail_data_request);
+    requests.push_back(send_merge_request);
+    boost::mpi::wait_all( requests.begin(), requests.end());
+    std::cout << "CL Rank: " << world.rank() 
+	      << " has received the returned data will wait now" 
+	      << " for its earlier send to complete" << std::endl;
+
+    //We don't want to overwrite the send buffer until the message was sent
+    //TODO: OPTIMIZATION: Somehow use the original datastructure as the receive buffer..  
     auto b = merge_receive_buffer.begin();  
     std::copy( b, b+size_to_overwrite, not_less_than_begin);
 
     //Do not move on until we are done. 
     send_max_request.wait();  
-    send_merge_request.wait();
+    std::cout << "Leaving CL: " << world.rank() << std::endl;
 }
 ///////////////////////////////////////////////////
 // Compare High
 ///////////////////////////////////////////////////
 template< typename Communicator, typename Iterator, typename Less>
 void compare_high(Communicator& world, int neighbor, 
-		 Iterator begin, Iterator end, Less& less) {
+		 Iterator begin, Iterator end, const Less& less) {
 
     typedef typename Iterator::value_type T; 
     typedef std::vector< T> Buffer;
@@ -72,22 +88,32 @@ void compare_high(Communicator& world, int neighbor,
 
     //send our greatest element to our neighbor in compare_low()
     auto send_min_request = world.isend( neighbor, 0, min);
+    //Create merge receive buffer (used below)
+    Buffer receive_merge_buffer;  
+    //Post receive for buffer extremely early..
+    auto receive_merge_request = world.irecv( neighbor, 1, receive_merge_buffer);
 
     //Wait until we have received max value..
     receive_max_request.wait();
 
+    std::cout << "CH Rank: " << world.rank() << " neighbor: " << neighbor 
+	      << " max: " << max << " min: " << min << std::endl;
+ 
     //Only consider values which are <= there max value
     auto greater_than_max_begin = std::upper_bound( begin, end, max, less);
+
     //Compute the size of the potential overlap 
     std::size_t 
      my_overlap_size = std::distance( begin, greater_than_max_begin);
-
+    std::cout << "CH Rank: " << world.rank() << " waiting to receive merge buffer.." << std::endl;
     //Wait to receive data from partner
-    Buffer receive_merge_buffer; 
-    world.recv( neighbor, 1, receive_merge_buffer);
-
+    receive_merge_request.wait();
+ 
     //Once it is received calculate the size
     std::size_t there_overlap_size = receive_merge_buffer.size();
+    std::cout << "CH Rank: " << world.rank()
+	      << " received the merge_buffer of size " 
+	      << there_overlap_size << std::endl;
 
     //Merge there data with our data
     Buffer merged_results( there_overlap_size+my_overlap_size);
@@ -95,19 +121,32 @@ void compare_high(Communicator& world, int neighbor,
 			    receive_merge_buffer.begin(),
 	 		    receive_merge_buffer.end(), merged_results.begin()); 
     auto new_data_begin =  new_data_end-my_overlap_size;
-    assert( std::distance( new_data_begin, new_data_end) == my_overlap_size);
+    bool correct_sizes = (std::distance( new_data_begin, new_data_end) == my_overlap_size);
+    std::cout << "CH Rank: " << world.rank() << " has new_data_size matching overlap_size? " << correct_sizes << std::endl;
     //overwrite the original data in tail with the new data 
     std::copy(  new_data_begin, new_data_end, begin); 
-
-    //[begin,end) now contains sorted data..
-    //the receive buffer now becomes the send buffer
-    receive_merge_buffer.erase( new_data_begin, receive_merge_buffer.end()); 
-
-    auto send_merge_request = world.isend( neighbor, 1, receive_merge_buffer);
  
+    //[begin,end) should now contains sorted data..
+    std::cout << "CH Rank: " << world.rank() << " is sorted: " 
+	      << std::is_sorted( begin, end, less) << std::endl;
+
+    //we erase the redundant data from the merge buffer, the remaining data we
+    //may return to the other process.. 
+    merged_results.erase(new_data_begin, new_data_end); 
+    receive_merge_buffer.swap( merged_results);
+
+    std::cout << "CH " << world.rank()  << 
+		" isending remaining merge buffer : " << receive_merge_buffer.size() << std::endl;
+    auto send_merge_request = world.isend( neighbor, 1, receive_merge_buffer);
+    
+    boost::mpi::request reqs[2];
+    reqs[ 0] = send_merge_request;
+    reqs[ 1] = send_min_request;
+ 
+    std::cout << "Waiting to leave CH: " << world.rank() << std::endl;
+    boost::mpi::wait_all( reqs, reqs+1);
     //Do not move on until we are done. 
-    send_min_request.wait();  
-    send_merge_request.wait();
+    std::cout << "Leaving CH: " << world.rank() << std::endl;
 }
 
 
