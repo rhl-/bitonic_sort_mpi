@@ -54,7 +54,6 @@ void compare_low(Communicator& world, int neighbor,
 
     //Do not move on until we are done. 
     send_max_request.wait();  
-    std::sort(begin, end, less);
 }
 ///////////////////////////////////////////////////
 // Compare High
@@ -122,7 +121,6 @@ void compare_high(Communicator& world, int neighbor,
     reqs[ 1] = send_min_request;
  
     boost::mpi::wait_all( reqs, reqs+1);
-    std::sort(begin, end, less);
 }
 
 
@@ -137,7 +135,6 @@ int dimensions = (int)log2(world.size());
 
 for (auto i = 0; i < dimensions; ++i) {
     bool window_id_parity = ((world.rank() >> (i+1))%2);
-
     for (auto j = i; j >= 0; --j) {
 	bool jth_bit_set = ((world.rank() >> j) % 2);
     	int neighbor = world.rank()^(1 << j);

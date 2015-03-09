@@ -41,7 +41,7 @@ std::sort( correct_answer.begin(), correct_answer.end());
 int main( int argc, char** argv){
 mpi::environment environment( argc, argv);
 mpi::communicator world;
-std::size_t n = 2+world.rank();
+std::size_t n = world.size()*5; 
 std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_int_distribution<> dis(0, 10e4);
@@ -55,11 +55,9 @@ distributed::bitonic_sort( world, data.begin(), data.end());
 std::vector< int> computed_answer;
 gather_data( world, data, computed_answer);
 if(world.rank() == 0){
-
 if(computed_answer == correct_answer){ std::cout << "ANSWER IS RIGHT!" << std::endl;}
 else{ std::cout << "ANSWER IS WRONG!" << std::endl; } 
 	return 0;
 }
-
 return 0;
 }
