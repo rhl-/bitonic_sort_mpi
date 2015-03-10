@@ -1,4 +1,4 @@
-
+#define DEBUG_BITONIC
 #include <boost/mpi.hpp>
 //#include <diy/serialization.hpp>
 #include "bitonic_sort.hpp"
@@ -41,13 +41,13 @@ std::sort( correct_answer.begin(), correct_answer.end());
 int main( int argc, char** argv){
 mpi::environment environment( argc, argv);
 mpi::communicator world;
-std::size_t n = world.size()*5; 
+std::size_t n = 2;// world.rank() + 2; 
 std::random_device rd;
 std::mt19937 gen(rd());
-std::uniform_int_distribution<> dis(0, 10e4);
-std::vector< int> data( n);
+std::uniform_int_distribution<> dis(0, 1e2);
+std::vector< int> data( n, world.rank());
+std::size_t pos=world.rank();
 for( auto& i : data){ i = dis(gen); }
-
 std::vector< int> correct_answer;
 generate_correct_answer( world, data, correct_answer);
 distributed::bitonic_sort( world, data.begin(), data.end());
@@ -55,9 +55,16 @@ distributed::bitonic_sort( world, data.begin(), data.end());
 std::vector< int> computed_answer;
 gather_data( world, data, computed_answer);
 if(world.rank() == 0){
+std::cout << std::endl;
 if(computed_answer == correct_answer){ std::cout << "ANSWER IS RIGHT!" << std::endl;}
-else{ std::cout << "ANSWER IS WRONG!" << std::endl; } 
-	return 0;
+else{ 
+std::cout << "ANSWER IS WRONG!" << std::endl << std::endl;
+for( auto & i : computed_answer){ std::cout << i << " "; }
+std::cout << std::endl;
+for( auto & i : correct_answer){ std::cout << i << " "; }
+std::cout << std::endl;
+
 }
+} 
 return 0;
 }
