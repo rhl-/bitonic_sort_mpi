@@ -68,13 +68,18 @@ void exchange_data( Communicator& world, std::size_t partner,
 	std::cout << partner << " " << world.size() << std::endl; 
    }
    assert( partner < world.size());
-   //Boost::mpi does not implement sendrecv
+   //Boost::mpi does not yet implement sendrecv
    boost::mpi::request requests[ 2];
    requests[ 0] = world.isend( partner, 0, send_buffer);
    requests[ 1] = world.irecv( partner, 0, receive_buffer); 
    boost::mpi::wait_all( requests, requests+2);
 }
-
+/*
+* TODO: We may save a factor of 2 when exchanging larger sets by having one processor
+* send its data to the other, having that one merge, then the other processor returning
+* the remaining elements. Then we only move |A|+|B| at most instead of sending |A|+|B|
+* always, and assuming a \alpha+\beta{n} model, we may potentially hide the latency term \alpha
+*/
 template< bool direction,
 	  typename Communicator, 
 	  typename Vector, 
@@ -94,6 +99,14 @@ void exchange_and_merge( Communicator& world,
 	      their_data.begin(), their_data.end(), 
 	      full_list.begin(), less);
   our_data.clear();
+  /* When processors do not have the same amount of data on a node the correctness
+   * of the overall sort depends critically on the exchange-merge.
+   * Suppose A and B are the sets in question, where A is held by low processor and B by high processor
+   * Define L_{A,B} = {x | x < max( min(A), min(B))}
+   * and U_{A,B} = {x | x > min(max(A),max(B)}
+   * We need that L goes to processor holding A and U goes to processor holding B
+   * Notice that |L| may be larger than |A| and similarly for |U|. 
+   */
   //This branch is removed by the compiler
   if( direction == detail::DOWN){
      int j = 0;
