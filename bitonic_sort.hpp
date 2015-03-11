@@ -1,5 +1,5 @@
 /*
-* Copyright 2014 Ryan H. Lewis
+* Copyright 2015 Ryan H. Lewis
 * This code is released under the BSD see LICENSE
 */
 #ifndef BITONIC_SORT_HPP
