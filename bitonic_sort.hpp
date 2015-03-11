@@ -1,3 +1,7 @@
+/*
+* Copyright 2014 Ryan H. Lewis
+* This code is released under the BSD see LICENSE
+*/
 #ifndef BITONIC_SORT_HPP
 #define BITONIC_SORT_HPP
 
