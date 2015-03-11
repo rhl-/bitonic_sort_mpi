@@ -41,11 +41,10 @@ std::sort( correct_answer.begin(), correct_answer.end());
 int main( int argc, char** argv){
 mpi::environment environment( argc, argv);
 mpi::communicator world;
-std::size_t n = world.rank()+2;// world.rank() + 2; 
 std::random_device rd;
 std::mt19937 gen(rd());
-std::uniform_int_distribution<> dis(0, 1e2);
-std::vector< int> data( n, world.rank());
+std::uniform_int_distribution<> dis(1, 1e3);
+std::vector< int> data( dis(gen), world.rank());
 std::size_t pos=world.rank();
 for( auto& i : data){ i = dis(gen); }
 std::vector< int> correct_answer;
