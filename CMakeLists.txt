@@ -2,7 +2,7 @@ project(bitonic_sort CXX)
 cmake_minimum_required(VERSION 2.6.2)
 find_package(MPI REQUIRED)
 
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
 add_definitions("-std=c++1y")
 include_directories("$ENV{HOME}/code/diy2/include")
 find_package(Boost COMPONENTS mpi serialization REQUIRED)

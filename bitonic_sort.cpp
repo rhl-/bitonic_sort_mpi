@@ -5,6 +5,7 @@
 #include <vector>
 #include <random>
 #include <sstream>
+#include <algorithm>
 
 typedef std::vector< int> Vector;
 namespace mpi = boost::mpi;
@@ -37,33 +38,46 @@ gather_data( world, data, correct_answer);
 std::sort( correct_answer.begin(), correct_answer.end());
 }
 
+template< typename Communicator>
+void sort_problem(Communicator& world, std::size_t n){
+std::random_device rd;
+std::mt19937 gen(rd());
+std::uniform_int_distribution<> dis(1, .5e9);
+std::vector< int> data( n); 
+for( auto& i : data){ i = dis(gen); }
+distributed::bitonic_sort( world, data);
+}
+
 
 int main( int argc, char** argv){
 mpi::environment environment( argc, argv);
 mpi::communicator world;
-std::random_device rd;
-std::mt19937 gen(rd());
-std::uniform_int_distribution<> dis(1, 1e3);
-std::vector< int> data( dis(gen), world.rank());
-std::size_t pos=world.rank();
-for( auto& i : data){ i = dis(gen); }
-std::vector< int> correct_answer;
-generate_correct_answer( world, data, correct_answer);
-distributed::bitonic_sort( world, data);
+mpi::timer t;
 
-std::vector< int> computed_answer;
-gather_data( world, data, computed_answer);
-if(world.rank() == 0){
-std::cout << std::endl;
-if(computed_answer == correct_answer){ std::cout << "ANSWER IS RIGHT!" << std::endl;}
-else{ 
-std::cout << "ANSWER IS WRONG!" << std::endl << std::endl;
-for( auto & i : computed_answer){ std::cout << i << " "; }
-std::cout << std::endl;
-for( auto & i : correct_answer){ std::cout << i << " "; }
-std::cout << std::endl;
-
+for(auto i = 4; i < 9; ++i){
+	t.restart();
+	sort_problem( world, std::pow(10, i));
+	double time = t.elapsed();
+	double max_time = 0;
+	mpi::reduce( world, time, max_time, mpi::maximum< double>(), 0);
+	if( world.rank() ==0){
+		std::cout << world.size() << " " << std::pow(10,i) << " " << max_time << std::endl << std::flush;
+	}
 }
-} 
+
+//std::vector< int> computed_answer;
+//gather_data( world, data, computed_answer);
+//if(world.rank() == 0){
+//std::cout << std::endl;
+//if(computed_answer == correct_answer){ std::cout << "ANSWER IS RIGHT!" << std::endl;}
+//else{ 
+//std::cout << "ANSWER IS WRONG!" << std::endl << std::endl;
+//for( auto & i : computed_answer){ std::cout << i << " "; }
+//std::cout << std::endl;
+//for( auto & i : correct_answer){ std::cout << i << " "; }
+//std::cout << std::endl;
+//
+//}
+//} 
 return 0;
 }
