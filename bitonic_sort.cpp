@@ -50,18 +50,19 @@ distributed::bitonic_sort( world, data);
 
 
 int main( int argc, char** argv){
+MPI_Init( &argc, &argv);
 mpi::environment environment( argc, argv);
 mpi::communicator world;
 mpi::timer t;
 
-for(auto i = 4; i < 9; ++i){
+for(auto i = 4; i < 10; ++i){
 	t.restart();
 	sort_problem( world, std::pow(10, i));
 	double time = t.elapsed();
 	double max_time = 0;
 	mpi::reduce( world, time, max_time, mpi::maximum< double>(), 0);
 	if( world.rank() ==0){
-		std::cout << world.size() << " " << std::pow(10,i) << " " << max_time << std::endl << std::flush;
+		std::cout << "Sorted: " << std::pow(10, i) << " numbers with: " << world.size() << " processors in: "  << max_time << std::endl << std::flush;
 	}
 }
 
